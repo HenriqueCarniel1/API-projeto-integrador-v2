@@ -6,8 +6,6 @@ module.exports = function auth(req, res, next) {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
 
-    console.log('Authorization Header:', authHeader);
-
     if (!token) {
         return res.status(401).json({ message: 'Token ausente' });
     }

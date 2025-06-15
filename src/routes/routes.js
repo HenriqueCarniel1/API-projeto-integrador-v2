@@ -12,5 +12,7 @@ router.put('/atualizarproduto/:id', auth, upload.single('imagem'), produtos.atua
 router.delete('/deletarproduto/:id', auth, produtos.deletarProduto);
 router.post('/adicionarproduto', auth, upload.single('imagem'), produtos.adicionarProduto);
 router.get('/tiposproduto', auth, produtos.listarTiposDeProduto);
+router.get('/perfil', auth, usuarios.perfil);
+router.put('/atualizarperfil', auth, usuarios.atualizarPerfil);
 
 module.exports = router;
