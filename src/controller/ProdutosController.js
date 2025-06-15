@@ -3,111 +3,113 @@ const db = require('../db/db');
 class ProdutosController {
 
     async listarprodutos(req, res) {
+        const { id: usrId, tipo } = req.user;
+
+        let sql = `
+        SELECT 
+            p.id, 
+            p.nome, 
+            p.preco,
+            to_char(p.data_vencimento,'YYYY-MM-DD') AS data_vencimento,
+            p.descricao, 
+            p.quantidade,
+            COALESCE(tp.nome, 'Sem categoria') AS tipo_produto,
+            COALESCE(u.nome, 'Sem vendedor')   AS vendedor
+        FROM produto p
+        LEFT JOIN tipo_produto tp ON tp.id = p.fk_tipo_produto_id
+        LEFT JOIN vendedor v       ON v.id = p.fk_vendedor_id
+        LEFT JOIN usuarios u       ON u.id = v.id
+    `;
+
+        const params = [];
+        if (tipo === 'vendedor') {
+            sql += 'WHERE p.fk_vendedor_id = $1 ';
+            params.push(usrId);
+        }
+
+        sql += 'ORDER BY p.id DESC';
+
         try {
-            const sql = `
-            SELECT p.id,
-                   p.nome,
-                   p.preco,
-                   to_char(p.data_vencimento, 'YYYY-MM-DD') AS data_vencimento,
-                   p.descricao,
-                   p.ativo,
-                   p.quantidade,
-                   COALESCE(tp.nome, 'Sem categoria') AS tipo_produto,
-                   COALESCE(v.nome, 'Sem vendedor')   AS vendedor
-            FROM   produto      p
-            LEFT   JOIN tipo_produto tp ON tp.id = p.fk_tipo_produto_id
-            LEFT   JOIN vendedor     v  ON v.id  = p.fk_vendedor_id
-            ORDER  BY p.id DESC;
-            `;
+            const { rows } = await db.query(sql, params);
 
-            const { rows } = await db.query(sql);
-            return res.status(200).json(rows);
+            const lista = rows.map(r => ({
+                ...r,
+                pode_editar: tipo === 'vendedor'
+            }));
 
+            res.json(lista);
         } catch (err) {
             console.error('listarprodutos:', err);
-            return res.status(500).json({ message: 'Erro interno ao listar produtos.', detalhe: err.message });
+            res.status(500).json({ message: 'Erro interno ao listar produtos.' });
         }
     }
 
     async atualizarProduto(req, res) {
-        const { id } = req.params;
+        const { id: prodId } = req.params;
         const { nome, descricao, preco } = req.body;
+        const { id: usrId, tipo } = req.user;
+
+        if (tipo !== 'vendedor')
+            return res.status(403).json({ message: 'Apenas vendedores podem editar.' });
 
         try {
-            const result = await db.query(
+            const r = await db.query(
                 `UPDATE produto
-                 SET nome = $1, descricao = $2, preco = $3
-                 WHERE id = $4`,
-                [nome, descricao, preco, id]
+                SET nome=$1, descricao=$2, preco=$3
+                WHERE id=$4 AND fk_vendedor_id=$5`,
+                [nome, descricao, preco, prodId, usrId]
             );
+            if (!r.rowCount)
+                return res.status(404).json({ message: 'Produto não encontrado ou sem permissão.' });
 
-            if (result.rowCount === 0) {
-                return res.status(404).json({ message: 'Produto não encontrado.' });
-            }
-
-            return res.status(200).json({ message: 'Produto atualizado com sucesso.' });
-
+            res.json({ message: 'Atualizado com sucesso.' });
         } catch (err) {
             console.error('atualizarProduto:', err);
-            return res.status(500).json({ message: 'Erro interno ao atualizar produto.' });
+            res.status(500).json({ message: 'Erro interno.' });
         }
     }
 
     async deletarProduto(req, res) {
-        const { id } = req.params;
+        const { id: prodId } = req.params;
+        const { id: usrId, tipo } = req.user;
+
+        if (tipo !== 'vendedor')
+            return res.status(403).json({ message: 'Apenas vendedores podem excluir.' });
 
         try {
-            const result = await db.query(
-                `DELETE FROM produto WHERE id = $1`, [id]
+            const r = await db.query(
+                `DELETE FROM produto WHERE id=$1 AND fk_vendedor_id=$2`,
+                [prodId, usrId]
             );
+            if (!r.rowCount)
+                return res.status(404).json({ message: 'Produto não encontrado ou sem permissão.' });
 
-            if (result.rowCount === 0) {
-                return res.status(404).json({ message: 'Produto não encontrado.' });
-            }
-
-            return res.status(200).json({ message: 'Produto excluído com sucesso.' });
-
+            res.json({ message: 'Excluído com sucesso.' });
         } catch (err) {
             console.error('deletarProduto:', err);
-            return res.status(500).json({ message: 'Erro interno ao excluir produto.' });
+            res.status(500).json({ message: 'Erro interno.' });
         }
     }
 
     async adicionarProduto(req, res) {
-        const {
-            nome,
-            preco,
-            data_producao,
-            descricao,
-            estabelecimento,
-            whatsapp
-        } = req.body;
+        const { nome, preco, data_vencimento, descricao } = req.body;
+        const { id: usrId, tipo } = req.user;
+
+        if (tipo !== 'vendedor')
+            return res.status(403).json({ message: 'Apenas vendedores podem cadastrar.' });
 
         try {
-            const vendedorQuery = await db.query(
-                `SELECT id FROM vendedor WHERE nome = $1 LIMIT 1`, [estabelecimento]
-            );
-
-            if (vendedorQuery.rows.length === 0) {
-                return res.status(404).json({ message: 'Vendedor não encontrado.' });
-            }
-
-            const fk_vendedor_id = vendedorQuery.rows[0].id;
-
             await db.query(
-                `INSERT INTO produto (nome, preco, data_de_vencimento, descricao, ativo, quantidade, fk_vendedor_id)
-             VALUES ($1, $2, $3, $4, TRUE, 1, $5)`,
-                [nome, preco, data_producao, descricao, fk_vendedor_id]
+                `INSERT INTO produto (nome,preco,data_vencimento,descricao,ativo,quantidade,fk_vendedor_id)
+                VALUES ($1,$2,$3,$4,TRUE,1,$5)`,
+                [nome, preco, data_vencimento || null, descricao, usrId]
             );
-
-            return res.status(201).json({ message: 'Produto cadastrado com sucesso.' });
-
+            res.status(201).json({ message: 'Produto cadastrado.' });
         } catch (err) {
             console.error('adicionarProduto:', err);
-            return res.status(500).json({ message: 'Erro interno ao cadastrar produto.', detalhe: err.message });
+            res.status(500).json({ message: 'Erro interno.' });
         }
     }
-
 }
 
 module.exports = new ProdutosController();

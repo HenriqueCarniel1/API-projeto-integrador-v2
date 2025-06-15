@@ -1,37 +1,65 @@
+/* src/controller/UsuariosController.js */
+require('dotenv').config();
 const bcrypt = require('bcrypt');
-const db = require('../db/db');
 const jwt = require('jsonwebtoken');
+const db = require('../db/db');
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
 class UsuariosController {
 
     async criarConta(req, res) {
-        const { nome, email, senha } = req.body;
+        const {
+            nome,
+            email,
+            senha,
+            tipoUsuario,
+            cpf,
+            data_nasc
+        } = req.body;
+
+        if (!['comprador', 'vendedor'].includes(tipoUsuario))
+            return res.status(400).json({ message: 'tipoUsuario deve ser "comprador" ou "vendedor"' });
 
         try {
-            const existe = await db.query('SELECT * FROM cliente WHERE email = $1', [email]);
-            if (existe.rows.length > 0) {
-                return res.status(409).json({ message: 'Email já cadastrado' });
-            }
+            const existe = await db.query('SELECT 1 FROM usuarios WHERE email = $1', [email]);
+            if (existe.rowCount) return res.status(409).json({ message: 'Email já cadastrado' });
 
-            const senhaCriptografada = await bcrypt.hash(senha, 10);
+            const hash = await bcrypt.hash(senha, 10);
 
-            const novoCliente = await db.query(
-                `INSERT INTO cliente (nome, email, senha, status, data_adicao, atualizado_em)
-                 VALUES ($1, $2, $3, $4, CURRENT_DATE, CURRENT_DATE)
-                 RETURNING id, nome, email`,
-                [nome, email, senhaCriptografada, true]
+            await db.query('BEGIN');
+
+            const { rows: [usuario] } = await db.query(
+                `INSERT INTO usuarios (nome, email, senha, tipo_usuario)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, nome, email, tipo_usuario`,
+                [nome, email, hash, tipoUsuario]
             );
 
-            res.status(201).json({
-                message: 'Cliente criado com sucesso',
-                cliente: novoCliente.rows[0]
-            });
+            if (tipoUsuario === 'comprador') {
+                await db.query(
+                    `INSERT INTO cliente (id, data_nasc, status)
+                    VALUES ($1, $2, TRUE)`,
+                    [usuario.id, data_nasc || null]
+                );
+            } else {
+                await db.query(
+                    `INSERT INTO vendedor (id, cpf, data_nasc)
+                    VALUES ($1, $2, $3)`,
+                    [usuario.id, cpf || null, data_nasc || null]
+                );
+            }
 
-        } catch (error) {
-            console.error('Erro ao criar cliente:', error);
-            res.status(500).json({ message: 'Erro interno no servidor' });
+            await db.query('COMMIT');
+
+            return res.status(201).json({
+                message: 'Usuário criado com sucesso',
+                usuario
+            });
+        } catch (err) {
+            await db.query('ROLLBACK');
+            console.error('Erro ao criar conta:', err);
+            return res.status(500).json({ message: 'Erro interno no servidor' });
         }
     }
 
@@ -39,26 +67,25 @@ class UsuariosController {
         const { email, senha } = req.body;
 
         try {
-            const { rows } = await db.query(
-                'SELECT id, nome, email, senha FROM cliente WHERE email = $1',
+            const { rows: [usuario] } = await db.query(
+                `SELECT id, nome, email, senha, tipo_usuario
+                FROM usuarios
+                WHERE email = $1`,
                 [email]
             );
 
-            if (!rows.length) {
+            if (!usuario)
                 return res.status(404).json({ message: 'E-mail não encontrado' });
-            }
 
-            const cliente = rows[0];
-            const senhaOk = await bcrypt.compare(senha, cliente.senha);
-
-            if (!senhaOk) {
+            const ok = await bcrypt.compare(senha, usuario.senha);
+            if (!ok)
                 return res.status(401).json({ message: 'Senha incorreta' });
-            }
 
             const payload = {
-                id: cliente.id,
-                nome: cliente.nome,
-                email: cliente.email
+                id: usuario.id,
+                nome: usuario.nome,
+                email: usuario.email,
+                tipo: usuario.tipo_usuario
             };
 
             const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
@@ -66,9 +93,8 @@ class UsuariosController {
             return res.status(200).json({
                 message: 'Login realizado com sucesso',
                 token,
-                cliente: payload
+                usuario: payload
             });
-
         } catch (err) {
             console.error('Erro no login:', err);
             return res.status(500).json({ message: 'Erro interno no servidor' });
