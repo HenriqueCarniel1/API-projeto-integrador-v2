@@ -20,7 +20,14 @@ class CarrinhoController {
         ORDER BY cp.id DESC
       `, [clienteId]);
 
-      res.json(rows);
+      const base = `${req.protocol}://${req.get('host')}/src/img/`;
+
+      const lista = rows.map(r => ({
+        ...r,
+        imagem_url: r.imagem ? base + r.imagem : null
+      }));
+
+      res.json(lista);
     } catch (err) {
       console.error('listar carrinho:', err);
       res.status(500).json({ message: 'Erro ao listar carrinho.' });
@@ -29,7 +36,7 @@ class CarrinhoController {
 
   async adicionar(req, res) {
     const { produtoId } = req.params;
-    const clienteId     = req.user.id;
+    const clienteId = req.user.id;
 
     try {
       const { rows: prod } = await db.query(
@@ -59,9 +66,9 @@ class CarrinhoController {
   }
 
   async atualizarQuantidade(req, res) {
-    const { produtoId }  = req.params;
+    const { produtoId } = req.params;
     const { quantidade } = req.body;
-    const clienteId      = req.user.id;
+    const clienteId = req.user.id;
 
     if (!Number.isInteger(quantidade) || quantidade < 0)
       return res.status(400).json({ message: 'Quantidade inválida.' });
@@ -103,7 +110,7 @@ class CarrinhoController {
 
   async remover(req, res) {
     const { produtoId } = req.params;
-    const clienteId     = req.user.id;
+    const clienteId = req.user.id;
 
     try {
       await db.query(`

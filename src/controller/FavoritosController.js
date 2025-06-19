@@ -15,7 +15,14 @@ class FavoritosController {
                 ORDER BY p.id DESC
             `, [clienteId]);
 
-            res.json(rows);
+            const baseUrl = `${req.protocol}://${req.get('host')}/src/img/`;
+
+            const lista = rows.map(p => ({
+                ...p,
+                imagem_url: p.imagem ? baseUrl + p.imagem : null
+            }));
+
+            res.json(lista);
         } catch (e) {
             console.error('listar favoritos:', e);
             res.status(500).json({ message: 'Erro ao carregar favoritos' });

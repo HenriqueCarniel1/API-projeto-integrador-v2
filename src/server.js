@@ -9,7 +9,7 @@ app.use(express.urlencoded({extended:true}));
 app.use(cors());
 app.use(express.json());
 app.use(routes);
-app.use('/src/img', express.static(path.join(__dirname, 'src', 'img')));
+app.use('/src/img', express.static(path.join(__dirname, 'img')));
 
 app.listen(porta, () => {
   console.log(`Server is running on port ${porta}`);
