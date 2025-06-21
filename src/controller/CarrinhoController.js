@@ -3,7 +3,7 @@ const db = require('../db/db');
 class CarrinhoController {
 
   async listar(req, res) {
-    const clienteId = req.user.id;
+    const { id: clienteId } = req.user;
 
     try {
       const { rows } = await db.query(`
@@ -13,19 +13,27 @@ class CarrinhoController {
           p.preco,
           cp.quantidade,
           cp.valor_total_item,
-          p.imagem
-        FROM carrinho_produto cp
-        JOIN produto p ON p.id = cp.fk_produto_id
-        WHERE cp.fk_cliente_id = $1
-        ORDER BY cp.id DESC
+          p.imagem,          -- BYTEA
+          p.mime             -- ex.: image/jpeg
+        FROM   carrinho_produto cp
+        JOIN   produto p ON p.id = cp.fk_produto_id
+        WHERE  cp.fk_cliente_id = $1
+        ORDER  BY cp.id DESC
       `, [clienteId]);
 
-      const base = `${req.protocol}://${req.get('host')}/src/img/`;
+      const lista = rows.map(r => {
+        let imagem_url = null;
 
-      const lista = rows.map(r => ({
-        ...r,
-        imagem_url: r.imagem ? base + r.imagem : null
-      }));
+        if (r.imagem) {
+          const b64 = r.imagem.toString('base64');
+          imagem_url = `data:${r.mime};base64,${b64}`;
+        }
+
+        delete r.imagem;
+        delete r.mime;
+
+        return { ...r, imagem_url };
+      });
 
       res.json(lista);
     } catch (err) {
