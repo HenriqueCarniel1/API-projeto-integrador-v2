@@ -1,14 +1,16 @@
-// middleware/upload.js
-const path = require('path');
+const path   = require('path');
+const fs     = require('fs');
 const multer = require('multer');
 
+const uploadDir = path.resolve(__dirname, '..', 'img');
+
+fs.mkdirSync(uploadDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '..', 'src', 'img'));
-  },
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, unique + path.extname(file.originalname));
   }
 });
 
