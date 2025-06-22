@@ -7,19 +7,21 @@ class ProdutosController {
 
         let sql = `
             SELECT
-            p.id,
-            p.imagem,                 -- nome do arquivo salvo
-            p.nome,
-            p.preco,
-            to_char(p.data_vencimento,'YYYY-MM-DD') AS data_vencimento,
-            p.descricao,
-            p.quantidade,
-            COALESCE(tp.nome, 'Sem categoria') AS tipo_produto,
-            COALESCE(u.nome, 'Sem vendedor')   AS vendedor
+                p.id,
+                p.imagem,
+                p.nome,
+                p.preco,
+                to_char(p.data_vencimento,'YYYY-MM-DD') AS data_vencimento,
+                p.descricao,
+                p.quantidade,
+                COALESCE(tp.nome, 'Sem categoria') AS tipo_produto,
+                COALESCE(u.nome, 'Sem vendedor')   AS vendedor,
+                t.numero AS telefone_vendedor
             FROM produto p
             LEFT JOIN tipo_produto tp ON tp.id = p.fk_tipo_produto_id
             LEFT JOIN vendedor v      ON v.id  = p.fk_vendedor_id
             LEFT JOIN usuarios u      ON u.id  = v.id
+            LEFT JOIN telefone t      ON t.fk_vendedor_id = v.id AND t.principal = TRUE
         `;
 
         const params = [];
