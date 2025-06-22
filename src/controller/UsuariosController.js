@@ -48,6 +48,14 @@ class UsuariosController {
                     VALUES ($1, $2, $3)`,
                     [usuario.id, cpf || null, data_nasc || null]
                 );
+
+                if (req.body.telefone) {
+                    await db.query(
+                        `INSERT INTO telefone (fk_vendedor_id, numero, principal)
+                            VALUES ($1, $2, TRUE)`,
+                        [usuario.id, req.body.telefone]
+                    );
+                }
             }
 
             await db.query('COMMIT');
@@ -188,8 +196,8 @@ class UsuariosController {
             }
             return res.json({ message: 'Perfil atualizado com sucesso' });
         } catch (e) {
-            if (e.code === '23505' && e.constraint === 'vendedor_cpf_key') { 
-                return res.status(409).json({ message: 'CPF já cadastrado' }) 
+            if (e.code === '23505' && e.constraint === 'vendedor_cpf_key') {
+                return res.status(409).json({ message: 'CPF já cadastrado' })
             }
             console.error('atualizarPerfil:', e);
             res.status(500).json({ message: 'Erro interno' });
